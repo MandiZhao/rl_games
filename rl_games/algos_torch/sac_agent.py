@@ -591,6 +591,9 @@ class SACAgent(BaseAlgorithm):
                         self.save(os.path.join(self.nn_dir, 'last_' + checkpoint_name))
 
                 if mean_rewards > self.last_mean_rewards and self.epoch_num >= self.save_best_after:
+                    # NEW(mandi): don't save unless the margin is bigger 
+                    if mean_rewards - self.last_mean_rewards < 1.0:
+                        continue
                     print('saving next best rewards: ', mean_rewards)
                     self.last_mean_rewards = mean_rewards
                     self.save(os.path.join(self.nn_dir, self.config['name']))

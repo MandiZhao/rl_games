@@ -137,3 +137,23 @@ class IsaacAlgoObserver(AlgoObserver):
             self.writer.add_scalar("scores/mean", mean_scores, frame)
             self.writer.add_scalar("scores/iter", mean_scores, epoch_num)
             self.writer.add_scalar("scores/time", mean_scores, total_time)
+
+    def wandb_after_print_stats(self, frame, epoch_num, total_time):
+        # log scalars from the episode
+        tolog = dict()
+        if self.ep_infos:
+            for key in self.ep_infos[0]:
+                info_tensor = torch.tensor([], device=self.algo.device)
+                for ep_info in self.ep_infos:
+                    # handle scalar and zero dimensional tensor infos
+                    if not isinstance(ep_info[key], torch.Tensor):
+                        ep_info[key] = torch.Tensor([ep_info[key]])
+                    if len(ep_info[key].shape) == 0:
+                        ep_info[key] = ep_info[key].unsqueeze(0)
+                    info_tensor = torch.cat((info_tensor, ep_info[key].to(self.algo.device)))
+                value = torch.mean(info_tensor)
+                # self.writer.add_scalar("Episode/" + key, value, epoch_num)
+                tolog["Episode/" + key] = value.item()
+            self.ep_infos.clear()
+        
+        return tolog
