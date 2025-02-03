@@ -1375,6 +1375,7 @@ class ContinuousA2CBase(A2CBase):
             if epoch_num % 100 == 0 or epoch_num == 1:
                 # print('Starting recording')
                 uenv.start_recording() 
+            uenv.set_curriculum(epoch_num)
             step_time, play_time, update_time, sum_time, a_losses, c_losses, b_losses, entropies, kls, last_lr, lr_mul = self.train_epoch()
             total_time += sum_time
             frame = self.frame // self.num_agents
@@ -1384,7 +1385,7 @@ class ContinuousA2CBase(A2CBase):
             should_exit = False
             tolog = dict()
             if self.global_rank == 0:
-                if epoch_num % 5 != 0 and epoch_num != 1:
+                if epoch_num % 10 != 0 and epoch_num != 1:
                     if self.game_rewards.current_size > 0:
                         mean_rewards = self.game_rewards.get_mean() 
                         self.mean_rewards = mean_rewards[0]
@@ -1397,7 +1398,7 @@ class ContinuousA2CBase(A2CBase):
                 
                 if epoch_num % 100 == 0 or epoch_num == 1:
                     # log video 
-                    print('Getting recorded frames')
+                    # print('Getting recorded frames')
                     frames = uenv.get_recorded_frames()
                     if frames is not None:
                         video_array = np.concatenate([np.expand_dims(frame, axis=0) for frame in frames ], axis=0).swapaxes(1, 3).swapaxes(2, 3)
