@@ -1371,7 +1371,7 @@ class ContinuousA2CBase(A2CBase):
         
         while True:
             epoch_num = self.update_epoch()
-            if epoch_num % 100 == 0 or epoch_num == 1:
+            if epoch_num % 500 == 0 or epoch_num == 1:
                 # print('Starting recording')
                 uenv.start_recording() 
             reset_rewards = uenv.set_curriculum(epoch_num)
