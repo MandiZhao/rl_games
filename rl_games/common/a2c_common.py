@@ -367,8 +367,7 @@ class A2CBase(BaseAlgorithm):
         # self.writer.add_scalar('performance/step_inference_time', play_time, frame)
         # self.writer.add_scalar('performance/step_time', step_time, frame)
         # self.writer.add_scalar('losses/a_loss', torch_ext.mean_list(a_losses).item(), frame)
-        # self.writer.add_scalar('losses/c_loss', torch_ext.mean_list(c_losses).item(), frame)
-
+        # self.writer.add_scalar('losses/c_loss', torch_ext.mean_list(c_losses).item(), frame) 
         # self.writer.add_scalar('losses/entropy', torch_ext.mean_list(entropies).item(), frame)
         # for k,v in self.aux_loss_dict.items():
         #     self.writer.add_scalar('losses/' + k, torch_ext.mean_list(v).item(), frame)
@@ -603,7 +602,7 @@ class A2CBase(BaseAlgorithm):
             mb_advs[t] = lastgaelam = (delta + self.gamma * self.tau * nextnonterminal * lastgaelam) * masks_t
         return mb_advs
 
-    def clear_stats(self, clean_rewards= True):
+    def clear_stats(self, clean_rewards=True):
         self.game_rewards.clear()
         self.game_shaped_rewards.clear()
         self.game_lengths.clear()
@@ -1143,7 +1142,7 @@ class DiscreteA2CBase(A2CBase):
                             self.save(os.path.join(self.nn_dir, 'last_' + checkpoint_name))
 
                     if mean_rewards[0] > self.last_mean_rewards and epoch_num >= self.save_best_after:
-                        print('saving next best rewards: ', mean_rewards)
+                        # print('saving next best rewards: ', mean_rewards)
                         self.last_mean_rewards = mean_rewards[0]
                         self.save(os.path.join(self.nn_dir, self.config['name']))
 
@@ -1375,7 +1374,9 @@ class ContinuousA2CBase(A2CBase):
             if epoch_num % 100 == 0 or epoch_num == 1:
                 # print('Starting recording')
                 uenv.start_recording() 
-            uenv.set_curriculum(epoch_num)
+            reset_rewards = uenv.set_curriculum(epoch_num)
+            if reset_rewards:
+                self.clear_stats()
             step_time, play_time, update_time, sum_time, a_losses, c_losses, b_losses, entropies, kls, last_lr, lr_mul = self.train_epoch()
             total_time += sum_time
             frame = self.frame // self.num_agents
@@ -1391,21 +1392,20 @@ class ContinuousA2CBase(A2CBase):
                         self.mean_rewards = mean_rewards[0]
                         if mean_rewards[0] > self.last_mean_rewards + 1.0 and epoch_num >= self.save_best_after:
                             # NEW: only save after a margin    
-                            print('saving next best rewards: ', mean_rewards)
+                            # print('saving next best rewards: ', mean_rewards)
                             self.last_mean_rewards = mean_rewards[0]
                             self.save(os.path.join(self.nn_dir, self.config['name']))  
+                    # self.algo_observer.clear_logs() # not saving the ep_infos before logging
                     continue
-                
-                if epoch_num % 100 == 0 or epoch_num == 1:
-                    # log video 
-                    # print('Getting recorded frames')
-                    frames = uenv.get_recorded_frames()
-                    if frames is not None:
-                        video_array = np.concatenate([np.expand_dims(frame, axis=0) for frame in frames ], axis=0).swapaxes(1, 3).swapaxes(2, 3)
-                        # wandb.log({"video": wandb.Video(video_array, fps=int(1/uenv.dt))}, step=epoch_num)
-                        tolog["video"] = wandb.Video(video_array, fps=int(1/uenv.dt))
-                        # breakpoint()
-                        # print('Logged video')
+                 
+                # log video  
+                frames = uenv.get_recorded_frames(wait_for_max=True)
+                if frames is not None:
+                    video_array = np.concatenate([np.expand_dims(frame, axis=0) for frame in frames ], axis=0).swapaxes(1, 3).swapaxes(2, 3)
+                    # wandb.log({"video": wandb.Video(video_array, fps=int(1/uenv.dt))}, step=epoch_num)
+                    tolog[f"videos/epoch{epoch_num}"] = wandb.Video(video_array, fps=int(1/uenv.dt/4))
+                    # breakpoint()
+                    # print('Logged video')
                 self.diagnostics.epoch(self, current_epoch = epoch_num)
                 # do we need scaled_time?
                 scaled_time = self.num_agents * sum_time
@@ -1460,11 +1460,12 @@ class ContinuousA2CBase(A2CBase):
                             self.save(os.path.join(self.nn_dir, 'last_' + checkpoint_name))
 
                     if mean_rewards[0] > self.last_mean_rewards + 1.0 and epoch_num >= self.save_best_after:
-                        # NEW: only save after a margin  
-                            
-                        print('saving next best rewards: ', mean_rewards)
+                        # NEW: only save after a margin   
+                        verbose = (epoch_num % 500 == 0)
+                        if verbose:
+                            print('saving next best rewards: ', mean_rewards)
                         self.last_mean_rewards = mean_rewards[0]
-                        self.save(os.path.join(self.nn_dir, self.config['name']))
+                        self.save(os.path.join(self.nn_dir, self.config['name']), verbose=verbose)
 
                         if 'score_to_win' in self.config:
                             if self.last_mean_rewards > self.config['score_to_win']:

@@ -110,6 +110,12 @@ class IsaacAlgoObserver(AlgoObserver):
     def after_clear_stats(self):
         # clear stored buffers
         self.mean_scores.clear()
+    
+    def clear_logs(self):
+        # useful for when infos are appended but want to discard them
+        self.ep_infos.clear()
+        self.direct_info.clear()
+        self.mean_scores.clear() 
 
     def after_print_stats(self, frame, epoch_num, total_time):
         # log scalars from the episode

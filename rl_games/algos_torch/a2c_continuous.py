@@ -75,9 +75,9 @@ class A2CAgent(a2c_common.ContinuousA2CBase):
         self.epoch_num += 1
         return self.epoch_num
         
-    def save(self, fn):
+    def save(self, fn, verbose=False):
         state = self.get_full_state_weights()
-        torch_ext.save_checkpoint(fn, state)
+        torch_ext.save_checkpoint(fn, state, verbose=verbose)
 
     def restore(self, fn, set_epoch=True):
         checkpoint = torch_ext.load_checkpoint(fn)
