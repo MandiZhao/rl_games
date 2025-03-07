@@ -1377,7 +1377,7 @@ class ContinuousA2CBase(A2CBase):
             reset_rewards = uenv.set_curriculum(epoch_num)
             if reset_rewards:
                 self.clear_stats()
-                self.reset_envs() # new: reset all the envs after curriculum change
+                # self.reset_envs() # new: reset all the envs after curriculum change
             step_time, play_time, update_time, sum_time, a_losses, c_losses, b_losses, entropies, kls, last_lr, lr_mul = self.train_epoch()
             total_time += sum_time
             frame = self.frame // self.num_agents
