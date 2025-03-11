@@ -874,8 +874,8 @@ class A2CBase(BaseAlgorithm):
                 shaped_rewards += self.gamma * res_dict['values'] * self.cast_obs(infos['time_outs']).unsqueeze(1).float()
 
             self.experience_buffer.update_data('rewards', n, shaped_rewards)
-
-            self.current_rewards += rewards
+            task_rewards = infos['log']['task_rew']
+            self.current_rewards += task_rewards
             self.current_shaped_rewards += shaped_rewards
             self.current_lengths += 1
             all_done_indices = self.dones.nonzero(as_tuple=False)
@@ -1142,7 +1142,7 @@ class DiscreteA2CBase(A2CBase):
                             self.save(os.path.join(self.nn_dir, 'last_' + checkpoint_name))
 
                     if mean_rewards[0] > self.last_mean_rewards and epoch_num >= self.save_best_after:
-                        # print('saving next best rewards: ', mean_rewards)
+                        print('saving next best rewards: ', mean_rewards)
                         self.last_mean_rewards = mean_rewards[0]
                         self.save(os.path.join(self.nn_dir, self.config['name']))
 
