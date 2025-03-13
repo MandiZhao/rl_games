@@ -1486,7 +1486,7 @@ class ContinuousA2CBase(A2CBase):
                     should_exit = True
                 
                 # add an early stop if reward is too low:
-                if epoch_num > 25 and (not uenv.use_curriculum):
+                if epoch_num > 2500 and (not uenv.use_curriculum):
                     if self.game_rewards.current_size == 0:
                         print('WARNING: No rewards recorded')
                         mean_rewards = -np.inf
