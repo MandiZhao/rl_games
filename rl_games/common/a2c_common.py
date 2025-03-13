@@ -1484,6 +1484,19 @@ class ContinuousA2CBase(A2CBase):
                         + '_rew_' + str(mean_rewards).replace('[', '_').replace(']', '_')))
                     print('MAX EPOCHS NUM!')
                     should_exit = True
+                
+                # add an early stop if reward is too low:
+                if epoch_num > 25 and (not uenv.use_curriculum):
+                    if self.game_rewards.current_size == 0:
+                        print('WARNING: No rewards recorded')
+                        mean_rewards = -np.inf
+                        should_exit = True
+                    elif mean_rewards[0] < 35:
+                        print('Reward too low, stopping')
+                        should_exit = True
+                        self.save(os.path.join(self.nn_dir, 'last_' + self.config['name'] + '_ep_' + str(epoch_num) \
+                            + '_rew_' + str(mean_rewards).replace('[', '_').replace(']', '_')))
+                    
 
                 if self.frame >= self.max_frames and self.max_frames != -1:
                     if self.game_rewards.current_size == 0:
