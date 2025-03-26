@@ -1,11 +1,6 @@
 import torch
 import copy
-from torch.utils.data import Dataset
-
-
-import torch
-from torch.utils.data import Dataset
-import random
+from torch.utils.data import Dataset  
 
 class PPODataset(Dataset):
     def __init__(self, batch_size, minibatch_size, is_discrete, is_rnn, device, seq_length, permute=False):

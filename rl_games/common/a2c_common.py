@@ -36,6 +36,11 @@ def swap_and_flatten01(arr):
     s = arr.size()
     return arr.transpose(0, 1).reshape(s[0] * s[1], *s[2:])
 
+def inverse_swap_and_flatten01(arr, s0, s1):
+    arr = arr.reshape((s1, s0, -1))
+    arr = arr.transpose(0, 1)
+    return arr
+
 def rescale_actions(low, high, action):
     d = (high - low) / 2.0
     m = (high + low) / 2.0

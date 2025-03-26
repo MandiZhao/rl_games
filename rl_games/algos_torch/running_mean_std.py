@@ -68,7 +68,6 @@ class RunningMeanStd(nn.Module):
             current_var = self.running_var
         # get output
 
-
         if denorm:
             y = torch.clamp(input, min=-5.0, max=5.0)
             y = torch.sqrt(current_var.float() + self.epsilon)*y + current_mean.float()

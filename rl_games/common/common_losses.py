@@ -57,3 +57,8 @@ def decoupled_actor_loss(behavior_action_neglog_probs, action_neglog_probs, prox
     pg_losses = torch.max(pg_losses1,pg_losses2)
 
     return pg_losses
+
+def critic_sil_loss(values, return_batch, clip):
+    advantage = torch.clamp(return_batch - values, 0.0, clip).detach()
+    c_loss = -values*advantage
+    return c_loss

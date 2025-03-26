@@ -79,7 +79,7 @@ def save_checkpoint(filename, state, verbose=False):
         print("=> saving checkpoint '{}'".format(filename + '.pth'))
     safe_save(state, filename + '.pth')
 
-def load_checkpoint(filename):
+def load_checkpoint(filename): 
     print("=> loading checkpoint '{}'".format(filename))
     state = safe_load(filename)
     return state

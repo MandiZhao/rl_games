@@ -15,7 +15,10 @@ from rl_games.common.algo_observer import DefaultAlgoObserver
 from rl_games.algos_torch import sac_agent
 
 
-def _restore(agent, args):
+from rl_games.algos_torch import a2c_sil_continuous
+
+
+def _restore(agent, args): 
     if 'checkpoint' in args and args['checkpoint'] is not None and args['checkpoint'] !='':
         if args['train'] and args.get('load_critic_only', False):
             assert agent.has_central_value, 'This should only work for asymmetric actor critic'
@@ -55,6 +58,7 @@ class Runner:
 
         self.algo_factory = object_factory.ObjectFactory()
         self.algo_factory.register_builder('a2c_continuous', lambda **kwargs : a2c_continuous.A2CAgent(**kwargs))
+        self.algo_factory.register_builder('a2c_sil_continuous', lambda **kwargs: a2c_sil_continuous.A2CSILAgent(**kwargs))
         self.algo_factory.register_builder('a2c_discrete', lambda **kwargs : a2c_discrete.DiscreteA2CAgent(**kwargs)) 
         self.algo_factory.register_builder('sac', lambda **kwargs: sac_agent.SACAgent(**kwargs))
         #self.algo_factory.register_builder('dqn', lambda **kwargs : dqnagent.DQNAgent(**kwargs))

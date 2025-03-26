@@ -18,6 +18,7 @@ class CentralValueTrain(nn.Module):
 
         self.ppo_device = ppo_device
         self.num_agents, self.horizon_length, self.num_actors, self.seq_length = num_agents, horizon_length, num_actors, seq_length
+        self.seq_len = self.seq_length
         self.normalize_value = normalize_value
         self.num_actions = num_actions
         self.state_shape = state_shape
@@ -286,5 +287,155 @@ class CentralValueTrain(nn.Module):
             nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_norm)
 
         self.optimizer.step()
+
+        return loss
+
+class CentralValueSILTrain(CentralValueTrain):
+    def __init__(self,  state_shape, value_size, ppo_device, num_agents, horizon_length, num_actors, num_actions, seq_len, normalize_value,network, config, writter, max_epochs, multi_gpu, zero_rnn_on_done, sil_coef, sil_clip):
+        
+        CentralValueTrain.__init__(self, state_shape, value_size, ppo_device, num_agents, horizon_length, num_actors, num_actions, seq_len, normalize_value,network, config, writter, max_epochs, multi_gpu, zero_rnn_on_done)
+        
+        self.sil_dataset = datasets.PPODataset(self.batch_size, self.minibatch_size, True, self.is_rnn, self.ppo_device, self.seq_len)        
+        self.sil_rnn_states = None
+        if self.is_rnn:
+            self.sil_rnn_states = self.model.get_default_rnn_state()
+            self.sil_rnn_states = [s.to(self.ppo_device) for s in self.sil_rnn_states]
+            total_agents = self.num_actors #* self.num_agents
+            num_seqs = self.horizon_length // self.seq_length
+            assert ((self.horizon_length * total_agents // self.num_minibatches) % self.seq_length == 0)
+            self.mb_sil_rnn_states = [ torch.zeros((num_seqs, s.size()[0], total_agents, s.size()[2]), dtype=torch.float32, device=self.ppo_device) for s in self.sil_rnn_states]
+        self.sil_clip = sil_clip
+        self.sil_coef = sil_coef
+
+    def pre_sil_step_rnn(self, n):
+        if not self.is_rnn:
+            return
+        if n % self.seq_length == 0:
+            for s, mb_s in zip(self.sil_rnn_states, self.mb_sil_rnn_states):
+                mb_s[n // self.seq_length,:,:,:] = s
+
+    def post_sil_step_rnn(self, all_done_indices, zero_rnn_on_done=True):
+        if not self.is_rnn:
+            return
+        if not self.zero_rnn_on_done:
+            return
+        all_done_indices = all_done_indices[::self.num_agents] // self.num_agents
+        for s in self.sil_rnn_states:
+            s[:,all_done_indices,:] = s[:,all_done_indices,:] * 0.0
+
+    def get_sil_value(self, input_dict):
+        self.eval()
+        obs_batch = input_dict['states']
+        actions = input_dict.get('actions', None)
+        obs_batch = self._preproc_obs(obs_batch)
+        res_dict = self.forward({'obs' : obs_batch, 'actions': actions,
+                                    'rnn_states': self.sil_rnn_states,
+                                    'is_train' : False})
+        #print('running value mean', self.model.value_mean_std.running_mean.item(), self.model.value_mean_std.running_var.item())
+        value, self.sil_rnn_states = res_dict['values'], res_dict['rnn_states']
+        #print('eval value', value.mean().item())
+        if self.num_agents > 1:
+            value = value.repeat(1, self.num_agents)
+            value = value.view(value.size()[0]*self.num_agents, -1)
+        #print('obs batch', obs_batch.mean().item(), 'value', value.mean().item())
+        #print('value weight', self.model.state_dict()['a2c_network.value.weight'].max())
+        #print('value bias', self.model.state_dict()['a2c_network.value.bias'].max())
+        return value
+
+    def update_sil_dataset(self, batch_dict):
+        value_preds = batch_dict['old_values']
+        returns = batch_dict['returns']
+        actions = batch_dict['actions']
+        dones = batch_dict['dones']
+        rnn_masks = batch_dict['rnn_masks']
+        if self.num_agents > 1:
+            res = self.update_multiagent_tensors(value_preds, returns, actions, dones)
+            batch_dict['old_values'] = res[0]
+            batch_dict['returns'] = res[1]
+            batch_dict['actions'] = res[2]
+            batch_dict['dones'] = res[3]
+
+        if self.is_rnn:
+            states = []
+            for mb_s in self.mb_sil_rnn_states:
+                t_size = mb_s.size()[0] * mb_s.size()[2]
+                h_size = mb_s.size()[3]
+                states.append(mb_s.permute(1,2,0,3).reshape(-1, t_size, h_size))
+
+            batch_dict['rnn_states'] = states
+            if self.num_agents > 1:
+                rnn_masks = res[3]
+            batch_dict['rnn_masks'] = rnn_masks
+        self.sil_dataset.update_values_dict(batch_dict)
+    
+    def train_sil_net(self):
+        self.train()
+        loss = 0
+        for _ in range(self.mini_epoch):
+            for idx in range(len(self.sil_dataset)):
+                loss += self.train_sil_critic(self.sil_dataset[idx])
+            if self.normalize_input:
+                self.model.running_mean_std.eval()  # don't need to update statstics more than one miniepoch
+        avg_loss = loss / (self.mini_epoch * self.num_minibatches)
+
+        #self.epoch_num += 1
+        #self.lr, _ = self.scheduler.update(self.lr, 0, self.epoch_num, 0, 0)
+        #self.update_lr(self.lr)
+        #self.frame += self.batch_size
+        if self.writter != None:
+            if self.sil_coef != 0:
+                self.writter.add_scalar('losses/cval_sil_loss', avg_loss/self.sil_coef, self.frame)
+            #self.writter.add_scalar('info/cval_sil_lr', self.lr, self.frame)
+        return avg_loss
+
+    def train_sil_critic(self, input_dict):
+        self.train()
+        loss = self.calc_sil_gradients(input_dict)
+        return loss.item()
+
+    def calc_sil_gradients(self, batch):
+        obs_batch = self._preproc_obs(batch['obs'])
+        value_preds_batch = batch['old_values']
+        returns_batch = batch['returns']
+        actions_batch = batch['actions']
+        dones_batch = batch['dones']
+        rnn_masks_batch = batch.get('rnn_masks')
+
+        batch_dict = {'obs' : obs_batch,
+                    'actions' : actions_batch,
+                    'seq_length' : self.seq_len,
+                    'dones' : dones_batch}
+        if self.is_rnn:
+            batch_dict['rnn_states'] = batch['rnn_states']
+
+        res_dict = self.model(batch_dict)
+        values = res_dict['values']
+        #print('returns batch', returns_batch[0])
+        #print('train values', values.mean().item())
+        #print('running value mean', self.model.value_mean_std.running_mean, self.model.value_mean_std.running_std)
+        loss = common_losses.critic_sil_loss(values, returns_batch, self.sil_clip)
+        losses, _ = torch_ext.apply_masks([loss], rnn_masks_batch)
+        loss = losses[0]*self.sil_coef
+        if self.multi_gpu:
+            self.optimizer.zero_grad()
+        else:
+            for param in self.model.parameters():
+                param.grad = None
+        loss.backward()
+
+        #TODO: Refactor this ugliest code of they year
+        if self.truncate_grads:
+            if self.multi_gpu:
+                self.optimizer.synchronize()
+                #self.scaler.unscale_(self.optimizer)
+                nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_norm)
+                with self.optimizer.skip_synchronize():
+                    self.optimizer.step()
+            else:
+                #self.scaler.unscale_(self.optimizer)
+                nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_norm)
+                self.optimizer.step()
+        else:
+            self.optimizer.step()
 
         return loss
