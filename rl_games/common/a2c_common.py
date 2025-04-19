@@ -1501,7 +1501,13 @@ class ContinuousA2CBase(A2CBase):
                         should_exit = True
                         self.save(os.path.join(self.nn_dir, 'last_' + self.config['name'] + '_ep_' + str(epoch_num) \
                             + '_rew_' + str(mean_rewards).replace('[', '_').replace(']', '_')))
-                    
+                # also early stop if gains are 0:
+                if uenv.use_curriculum and uenv.curriculum.num_epoch_since_zero > 1500:
+                    print('Curriculum zero gains for 1500 epochs now, stopping')
+                    should_exit = True
+                    self.save(os.path.join(self.nn_dir, 'last_' + self.config['name'] + '_ep_' + str(epoch_num) \
+                        + '_rew_' + str(mean_rewards).replace('[', '_').replace(']', '_')))
+
 
                 if self.frame >= self.max_frames and self.max_frames != -1:
                     if self.game_rewards.current_size == 0:
