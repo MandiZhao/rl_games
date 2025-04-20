@@ -1502,8 +1502,8 @@ class ContinuousA2CBase(A2CBase):
                         self.save(os.path.join(self.nn_dir, 'last_' + self.config['name'] + '_ep_' + str(epoch_num) \
                             + '_rew_' + str(mean_rewards).replace('[', '_').replace(']', '_')))
                 # also early stop if gains are 0:
-                if uenv.use_curriculum and uenv.curriculum.num_epoch_since_zero > 1500:
-                    print('Curriculum zero gains for 1500 epochs now, stopping')
+                if uenv.use_curriculum and uenv.curriculum.num_epoch_since_zero > 1000:
+                    print('Curriculum zero gains for 1000 epochs now, stopping')
                     should_exit = True
                     self.save(os.path.join(self.nn_dir, 'last_' + self.config['name'] + '_ep_' + str(epoch_num) \
                         + '_rew_' + str(mean_rewards).replace('[', '_').replace(']', '_')))
