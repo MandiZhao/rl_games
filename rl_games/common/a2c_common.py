@@ -804,8 +804,13 @@ class A2CBase(BaseAlgorithm):
                 shaped_rewards += self.gamma * res_dict['values'] * self.cast_obs(infos['time_outs']).unsqueeze(1).float()
 
             self.experience_buffer.update_data('rewards', n, shaped_rewards)
-
-            self.current_rewards += rewards
+            if 'task_rew' not in infos['episode']:
+                print('Warning: task rewards not found in infos')
+                self.current_rewards += rewards
+            else:
+                task_rewards = infos['episode']['task_rew'] # this is shape (B,)
+                self.current_rewards += task_rewards.unsqueeze(1)
+                
             self.current_shaped_rewards += shaped_rewards
             self.current_lengths += 1
             
@@ -879,8 +884,9 @@ class A2CBase(BaseAlgorithm):
                 shaped_rewards += self.gamma * res_dict['values'] * self.cast_obs(infos['time_outs']).unsqueeze(1).float()
 
             self.experience_buffer.update_data('rewards', n, shaped_rewards)
-            task_rewards = infos['log']['task_rew']
-            self.current_rewards += task_rewards
+            # task_rewards = infos['log']['task_rew']
+            # self.current_rewards += task_rewards
+            raise NotImplementedError("task rewards not implemented")
             self.current_shaped_rewards += shaped_rewards
             self.current_lengths += 1
             all_done_indices = self.dones.nonzero(as_tuple=False)
@@ -1381,6 +1387,7 @@ class ContinuousA2CBase(A2CBase):
                 uenv.start_recording() 
             reset_rewards = uenv.set_curriculum(epoch_num)
             if reset_rewards:
+                print(f'Epoch {epoch_num}: Resetting rewards tracker after curriculum change')
                 self.clear_stats()
                 # self.reset_envs() # new: reset all the envs after curriculum change
             step_time, play_time, update_time, sum_time, a_losses, c_losses, b_losses, entropies, kls, last_lr, lr_mul = self.train_epoch()
